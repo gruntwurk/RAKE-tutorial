@@ -59,25 +59,33 @@ def split_sentences(text):
     return sentences
 
 
-def build_stop_word_regex(stop_word_file_path):
-    stop_word_list = load_stop_words(stop_word_file_path)
-    stop_word_regex_list = []
-    for word in stop_word_list:
-        word_regex = r'\b' + word + r'(?![\w-])'  # added look ahead for hyphen
-        stop_word_regex_list.append(word_regex)
-    stop_word_pattern = re.compile('|'.join(stop_word_regex_list), re.IGNORECASE)
-    return stop_word_pattern
+def build_stop_words(stop_word_file_path):
+    stop_words = set()
+    for line in open(stop_word_file_path):
+        if line.strip()[0:1] != "#":
+            for word in line.split():  # in case more than one per line
+                stop_words.add(word.strip().lower())
+    return stop_words
 
 
-def generate_candidate_keywords(sentence_list, stopword_pattern):
+def generate_candidate_keywords(sentence_list, stop_words):
     phrase_list = []
     for s in sentence_list:
-        tmp = re.sub(stopword_pattern, '|', s.strip())
-        phrases = tmp.split("|")
-        for phrase in phrases:
-            phrase = phrase.strip().lower()
-            if phrase != "":
-                phrase_list.append(phrase)
+        s = s.strip().lower()
+        word_start = 0
+        phrase_start = 0
+        for i, c in enumerate(s):
+            if not c.isalnum():
+                word = s[word_start: i]
+                if word.strip() in stop_words:
+                    phrase = s[phrase_start:i - len(word)].strip().lower().strip()
+                    if len(phrase) > 0:
+                        phrase_list.append(phrase)
+                    phrase_start = i
+                word_start = i
+        phrase = s[phrase_start:].strip()
+        if len(phrase) > 0 and phrase not in stop_words:
+            phrase_list.append(phrase)
     return phrase_list
 
 
@@ -122,7 +130,7 @@ def generate_candidate_keyword_scores(phrase_list, word_score):
 class Rake(object):
     def __init__(self, stop_words_path):
         self.stop_words_path = stop_words_path
-        self.__stop_words_pattern = build_stop_word_regex(stop_words_path)
+        self.__stop_words_pattern = build_stop_words(stop_words_path)
 
     def run(self, text):
         sentence_list = split_sentences(text)
@@ -144,7 +152,7 @@ if test:
     sentenceList = split_sentences(text)
     #stoppath = "FoxStoplist.txt" #Fox stoplist contains "numbers", so it will not find "natural numbers" like in Table 1.1
     stoppath = "SmartStoplist.txt"  #SMART stoplist misses some of the lower-scoring keywords in Figure 1.5, which means that the top 1/3 cuts off one of the 4.0 score words in Table 1.1
-    stopwordpattern = build_stop_word_regex(stoppath)
+    stopwordpattern = build_stop_words(stoppath)
 
     # generate candidate keywords
     phraseList = generate_candidate_keywords(sentenceList, stopwordpattern)
